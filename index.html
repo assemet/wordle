@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Wordle Telegram Mini App</title>
+  <!-- مكتبة Telegram WebApp الرسمية -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg-color: #121213;
+      --text-color: #ffffff;
+      --tile-border: #3a3a3c;
+      --tile-correct: #538d4e;
+      --tile-present: #b59f3b;
+      --tile-absent: #3a3a3c;
+      --key-bg: #818384;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    header {
+      text-align: center;
+      border-bottom: 1px solid var(--tile-border);
+      width: 100%;
+      padding-bottom: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 1px;
+    }
+
+    .version-tag {
+      font-size: 12px;
+      color: #818384;
+      margin-top: 4px;
+    }
+
+    /* لوحة التخمينات */
+    #board-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-grow: 1;
+    }
+
+    .board {
+      display: grid;
+      grid-template-rows: repeat(6, 1fr);
+      grid-gap: 5px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-gap: 5px;
+    }
+
+    .tile {
+      width: 52px;
+      height: 52px;
+      border: 2px solid var(--tile-border);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      font-weight: bold;
+      text-transform: uppercase;
+      box-sizing: border-box;
+      border-radius: 4px;
+    }
+
+    .tile[data-state="correct"] {
+      background-color: var(--tile-correct);
+      border-color: var(--tile-correct);
+    }
+
+    .tile[data-state="present"] {
+      background-color: var(--tile-present);
+      border-color: var(--tile-present);
+    }
+
+    .tile[data-state="absent"] {
+      background-color: var(--tile-absent);
+      border-color: var(--tile-absent);
+    }
+
+    /* لوحة المفاتيح */
+    #keyboard-container {
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .keyboard-row {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      width: 100%;
+    }
+
+    .key {
+      background-color: var(--key-bg);
+      color: white;
+      border: 0;
+      padding: 0;
+      height: 50px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-transform: uppercase;
+    }
+
+    .key.large {
+      flex: 1.5;
+      font-size: 12px;
+    }
+
+    .key[data-state="correct"] { background-color: var(--tile-correct); }
+    .key[data-state="present"] { background-color: var(--tile-present); }
+    .key[data-state="absent"] { background-color: var(--tile-absent); opacity: 0.5; }
+
+    /* المنبثق (Modal) للنهاية والشرح */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .modal-content {
+      background: #1e1e20;
+      padding: 24px;
+      border-radius: 12px;
+      text-align: center;
+      max-width: 85%;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    .share-btn {
+      background: #2481cc;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 15px;
+      width: 100%;
+    }
+
+    .meaning-box {
+      background: #2a2a2c;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #ddd;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>WORDLE TELEGRAM</h1>
+    <div id="version-tag" class="version-tag">النسخة العامة 🇸🇦</div>
+  </header>
+
+  <div id="board-container">
+    <div class="board" id="board"></div>
+  </div>
+
+  <div id="keyboard-container" id="keyboard"></div>
+
+  <!-- Modal النتيجة -->
+  <div class="modal" id="game-modal">
+    <div class="modal-content">
+      <h2 id="modal-title">🎉 تهانينا!</h2>
+      <p id="modal-msg"></p>
+      <div id="meaning-container" class="meaning-box" style="display:none;">
+        <strong>معنى الكلمة:</strong>
+        <p id="meaning-text"></p>
+      </div>
+      <button class="share-btn" onclick="shareResult()">🚀 مشاركة النتيجة في تيليجرام</button>
+    </div>
+  </div>
+
+  <script>
+    // تهيئة Telegram WebApp
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    // --- 1. قوائم الكلمات والمعاني ---
+    const WORD_LISTS = {
+      crypto: [
+        { word: "TOKEN", meaning: "الرمز الرقمي المستعمل في شبكات البلوكشين ويمثل أصولاً أو فائدة داخل مشروع معّين." },
+        { word: "CHAIN", meaning: "السلسلة البرمجية (Blockchain) التي تُحفظ فيها العمليات بشكل مشفر وموزع." },
+        { word: "WHALE", meaning: "الحوت: مستثمر يمتلك كميات ضخمة من العملات ويؤثر تحركه على سعر السوق." },
+        { word: "SMART", meaning: "مستوحاة من العقود الذكية (Smart Contracts) التي تنفذ الشروط تلقائياً." },
+        { word: "MINER", meaning: "المُعدّن: جهاز أو شخص يستهلك طاقة معالجة لتوثيق المعاملات وإضافة كتل جديدة." }
+      ],
+      arabic: [
+        { word: "كلمات", meaning: "جمع كلمة، وهي اللبنة الأساسية للغة." },
+        { word: "تحدي", meaning: "إظهار القدرة على تجاوز الصعاب والألغاز." },
+        { word: "محتوى", meaning: "المادة أو المعلومات المعروضة داخل التطبيقات." },
+        { word: "ابتكر", meaning: "إنشاء واستحداث فكرة جديدة لم تكن موجودة." },
+        { word: "نجاح", meaning: "تحقيق الهدف المطلوب بإتقان وتميز." }
+      ]
+    };
+
+    // --- 2. تحديد النسخة بناءً على رابط Telegram (startapp) ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const startAppParam = urlParams.get('tgWebAppStartParam') || tg?.initDataUnsafe?.start_param || 'arabic';
+    const currentVersion = WORD_LISTS[startAppParam] ? startAppParam : 'arabic';
+
+    document.getElementById('version-tag').innerText = 
+      currentVersion === 'crypto' ? 'نسخة الكريبتو 🪙 (English)' : 'النسخة العربية 🇸🇦';
+
+    const activeList = WORD_LISTS[currentVersion];
+
+    // --- 3. اختيار كلمة اليوم بدون سيرفر ---
+    function getWordOfTheDay() {
+      const now = new Date();
+      const startOfYear = new Date(now.getFullYear(), 0, 0);
+      const diff = now - startOfYear;
+      const oneDay = 1000 * 60 * 60 * 24;
+      const dayOfYear = Math.floor(diff / oneDay);
+      const index = dayOfYear % activeList.length;
+      return activeList[index];
+    }
+
+    const todayTarget = getWordOfTheDay();
+    const targetWord = todayTarget.word.toUpperCase();
+
+    // --- 4. إعداد حالة اللعبة ---
+    let currentRow = 0;
+    let currentTile = 0;
+    let isGameOver = false;
+    const guesses = Array(6).fill("");
+    const gridState = []; // لمشاركة النتيجة بالمربعات
+
+    // --- 5. رسم لوحة اللعبة ---
+    const board = document.getElementById('board');
+    for (let i = 0; i < 6; i++) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      for (let j = 0; j < 5; j++) {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        tile.id = `tile-${i}-${j}`;
+        row.appendChild(tile);
+      }
+      board.appendChild(row);
+    }
+
+    // --- 6. رسم لوحة المفاتيح ---
+    const keyboardContainer = document.getElementById('keyboard-container');
+    const layout = currentVersion === 'crypto' 
+      ? [["Q","W","E","R","T","Y","U","I","O","P"], ["A","S","D","F","G","H","J","K","L"], ["ENTER","Z","X","C","V","B","N","M","DEL"]]
+      : [["ض","ص","ث","ق","ف","غ","ع","هـ","خ","ح","ج"], ["ش","س","ي","ب","ل","ا","ت","ن","م","ك","ط"], ["ENTER","ذ","د","ز","ر","و","ة","ى","ء","DEL"]];
+
+    layout.forEach(rowKeys => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'keyboard-row';
+      rowKeys.forEach(key => {
+        const btn = document.createElement('button');
+        btn.className = `key ${key.length > 1 ? 'large' : ''}`;
+        btn.innerText = key === 'DEL' ? '⌫' : key;
+        btn.onclick = () => handleKeyPress(key);
+        btn.id = `key-${key}`;
+        rowEl.appendChild(btn);
+      });
+      keyboardContainer.appendChild(rowEl);
+    });
+
+    // --- 7. معالجة الإدخال ---
+    function handleKeyPress(key) {
+      if (isGameOver) return;
+
+      if (key === 'DEL') {
+        if (currentTile > 0) {
+          currentTile--;
+          guesses[currentRow] = guesses[currentRow].slice(0, -1);
+          const tile = document.getElementById(`tile-${currentRow}-${currentTile}`);
+          tile.innerText = '';
+        }
+      } else if (key === 'ENTER') {
+        if (currentTile === 5) {
+          checkGuess();
+        } else {
+          if (tg) tg.HapticFeedback.notificationOccurred('error');
+        }
+      } else if (currentTile < 5 && key.length === 1) {
+        guesses[currentRow] += key;
+        const tile = document.getElementById(`tile-${currentRow}-${currentTile}`);
+        tile.innerText = key;
+        currentTile++;
+      }
+    }
+
+    // --- 8. التحقق من التخمين ---
+    function checkGuess() {
+      const guess = guesses[currentRow];
+      const targetArr = targetWord.split('');
+      const rowResult = [];
+
+      // تقييم كل حرف
+      for (let i = 0; i < 5; i++) {
+        const tile = document.getElementById(`tile-${currentRow}-${i}`);
+        const letter = guess[i];
+        const keyBtn = document.getElementById(`key-${letter}`);
+
+        if (letter === targetArr[i]) {
+          tile.setAttribute('data-state', 'correct');
+          if (keyBtn) keyBtn.setAttribute('data-state', 'correct');
+          rowResult.push('🟩');
+        } else if (targetArr.includes(letter)) {
+          tile.setAttribute('data-state', 'present');
+          if (keyBtn && keyBtn.getAttribute('data-state') !== 'correct') {
+            keyBtn.setAttribute('data-state', 'present');
+          }
+          rowResult.push('🟨');
+        } else {
+          tile.setAttribute('data-state', 'absent');
+          if (keyBtn && !keyBtn.getAttribute('data-state')) {
+            keyBtn.setAttribute('data-state', 'absent');
+          }
+          rowResult.push('⬛');
+        }
+      }
+
+      gridState.push(rowResult.join(''));
+
+      if (guess === targetWord) {
+        endGame(true);
+      } else if (currentRow === 5) {
+        endGame(false);
+      } else {
+        currentRow++;
+        currentTile = 0;
+      }
+    }
+
+    // --- 9. إنهاء اللعبة وإظهار النتائج ---
+    function endGame(isWin) {
+      isGameOver = true;
+      if (tg) tg.HapticFeedback.notificationOccurred(isWin ? 'success' : 'error');
+
+      setTimeout(() => {
+        const modal = document.getElementById('game-modal');
+        const title = document.getElementById('modal-title');
+        const msg = document.getElementById('modal-msg');
+        const meaningBox = document.getElementById('meaning-container');
+        const meaningText = document.getElementById('meaning-text');
+
+        if (isWin) {
+          title.innerText = "🎉 انتصار رائع!";
+          msg.innerText = `عرفت كلمة اليوم (${targetWord}) في ${currentRow + 1} محاولات!`;
+        } else {
+          title.innerText = "💔 حظاً أوفر!";
+          msg.innerText = `الكلمة الصحيحة كانت: ${targetWord}`;
+        }
+
+        if (todayTarget.meaning) {
+          meaningBox.style.display = 'block';
+          meaningText.innerText = todayTarget.meaning;
+        }
+
+        modal.style.display = 'flex';
+      }, 500);
+    }
+
+    // --- 10. آلية المشاركة الفيروسية على تيليجرام ---
+    function shareResult() {
+      const attemptsText = guesses[currentRow] === targetWord ? `${currentRow + 1}/6` : 'X/6';
+      const gridText = gridState.join('\n');
+      
+      const shareMessage = `🧩 Wordle Telegram (${currentVersion.toUpperCase()})\n` +
+                           `تحدي اليوم: ${attemptsText}\n\n` +
+                           `${gridText}\n\n` +
+                           `👇 العب وتحداني مجاناً الآن عبر الرابط:`;
+
+      const botUsername = "WordleHubBot"; // استبدله باسم البوت الخاص بك
+      const shareUrl = `https://t.me/share/url?url=https://t.me/${botUsername}?startapp=${currentVersion}&text=${encodeURIComponent(shareMessage)}`;
+
+      if (tg) {
+        tg.openTelegramLink(shareUrl);
+      } else {
+        navigator.clipboard.writeText(`${shareMessage}\nhttps://t.me/${botUsername}?startapp=${currentVersion}`);
+        alert("تم نسخ النتيجة ورابط التحدي للحافظة!");
+      }
+    }
+  </script>
+</body>
+</html>
